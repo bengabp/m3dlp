@@ -1,0 +1,32 @@
+services:
+  tgbot:
+    build: .
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - downloader
+
+  downloader:
+    build: .
+    restart: always
+    depends_on:
+      - redis
+    env_file:
+      - .env
+    environment:
+      - BROKER_URL=redis://redis:6379/0
+    command: ["dramatiq", "--queues=media_download", "m3dlp.tasks"]
+
+  redis:
+    image: redis:latest
+    restart: always
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
+    driver: local
+    
