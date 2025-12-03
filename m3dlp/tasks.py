@@ -29,11 +29,18 @@ bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 async def download_media(url, chat_id, message_id):
     # try:
     media_id = settings.gen_uuid_hex()
-    video_path = os.path.join(DOWNLOADS_DIR, f"{media_id}")
+    video_path = os.path.join(DOWNLOADS_DIR, f"{media_id}.mp4")
     ydl_opts = {
-        "format": "mp4",
+        "format": "bestvideo+bestaudio/best",
+        "merge_output_format": "mp4",
         "outtmpl": video_path,
-        "ignoreerrors": "only_download"
+        "ignoreerrors": "only_download",
+        "postprocessors": [
+            {
+                "key": "FFmpegVideoConvertor",
+                "preferedformat": "mp4"
+            }
+        ]
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
