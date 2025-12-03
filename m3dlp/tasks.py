@@ -9,6 +9,7 @@ from telegram.error import TimedOut
 from telegram.constants import ChatAction
 from dramatiq.middleware import Middleware
 from dramatiq.brokers.redis import RedisBroker
+import subprocess
 
 class StartupMiddleware(Middleware):
     def before_worker_boot(self, broker, worker):
@@ -30,21 +31,20 @@ async def download_media(url, chat_id, message_id):
     # try:
     media_id = settings.gen_uuid_hex()
     video_path = os.path.join(DOWNLOADS_DIR, f"{media_id}.mp4")
-    ydl_opts = {
-        "format": "bestvideo+bestaudio/best",
-        "merge_output_format": "mp4",
-        "outtmpl": video_path,
-        "ignoreerrors": "only_download",
-        "postprocessors": [
-            {
-                "key": "FFmpegVideoConvertor",
-                "preferedformat": "mp4"
-            }
-        ]
-    }
+    cmd = [
+        "yt-dlp",
+        "-f", "bestvideo+bestaudio/best",
+        "--merge-output-format", "mp4",
+        "-o", video_path,
+        url
+    ]
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        logger.error(f"yt-dlp failed: {e}")
+        return
+
     while 1:
         try:
             with open(video_path, "rb") as video_file:
