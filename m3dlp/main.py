@@ -21,12 +21,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     reply_text= "Invalid URL!"
-    if settings.validate_and_extract_base_url(update.message.text):
-        msg = await update.message.reply_text("Download started!", reply_to_message_id=update.message.message_id)
-        logger.info(f"MSG: {update.message.text}")
-        download_media.send(update.message.text, update.effective_chat.id, msg.message_id)
+    text = update.message.text
+    msg_id = update.message.message_id
+    if settings.validate_and_extract_base_url(text):
+        msg = await update.message.reply_text("Download started!", reply_to_message_id=msg_id)
+        logger.info(f"MSG: {text}")
+        download_media.send(text, update.effective_chat.id, msg.message_id)
     else:
-        await update.message.reply_text(reply_text, reply_to_message_id=update.message.message_id)
+        await update.message.reply_text(reply_text, reply_to_message_id=msg_id)
 
 
 def main() -> None:
