@@ -34,8 +34,9 @@ async def download_media(url, chat_id, message_id):
     cmd = [
         "yt-dlp",
         "-f", "bestvideo+bestaudio/best",
+        "--merge-output-format", "mkv",
         "--recode-video", "mp4",
-        "--merge-output-format", "mp4",
+        "--postprocessor-args", "VideoConvertor:-c:v libx264 -c:a aac",
         "-o", video_path,
         url
     ]
