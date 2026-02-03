@@ -21,12 +21,21 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     reply_text= "Invalid URL!"
-    text = update.message.text
+    text = update.message.text.strip()
     msg_id = update.message.message_id
+    
+    is_audio = False
+    if text.lower().startswith("audio "):
+        is_audio = True
+        text = text[6:].strip()
+    elif text.lower().endswith(" audio"):
+        is_audio = True
+        text = text[:-6].strip()
+
     if settings.validate_and_extract_base_url(text):
         msg = await update.message.reply_text("Download started!", reply_to_message_id=msg_id)
-        logger.info(f"MSG: {text}")
-        download_media.send(text, update.effective_chat.id, msg.message_id)
+        logger.info(f"MSG: {text} | Audio: {is_audio}")
+        download_media.send(text, update.effective_chat.id, msg.message_id, is_audio)
     else:
         await update.message.reply_text(reply_text, reply_to_message_id=msg_id)
 

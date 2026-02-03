@@ -27,19 +27,33 @@ dramatiq.get_broker().add_middleware(StartupMiddleware())
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 
 @dramatiq.actor(queue_name="media_download")
-async def download_media(url, chat_id, message_id):
+async def download_media(url, chat_id, message_id, is_audio=False):
     # try:
     media_id = settings.gen_uuid_hex()
-    video_path = os.path.join(DOWNLOADS_DIR, f"{media_id}.mp4")
-    cmd = [
-        "yt-dlp",
-        "-f", "bestvideo+bestaudio/best",
-        "--merge-output-format", "mkv",
-        "--recode-video", "mp4",
-        "--postprocessor-args", "VideoConvertor:-c:v libx264 -c:a aac",
-        "-o", video_path,
-        url
-    ]
+    
+    if is_audio:
+        ext = "mp3"
+        video_path = os.path.join(DOWNLOADS_DIR, f"{media_id}.{ext}")
+        cmd = [
+            "yt-dlp",
+            "-f", "bestaudio/best",
+            "-x",
+            "--audio-format", "mp3",
+            "-o", video_path,
+            url
+        ]
+    else:
+        ext = "mp4"
+        video_path = os.path.join(DOWNLOADS_DIR, f"{media_id}.{ext}")
+        cmd = [
+            "yt-dlp",
+            "-f", "bestvideo+bestaudio/best",
+            "--merge-output-format", "mkv",
+            "--recode-video", "mp4",
+            "--postprocessor-args", "VideoConvertor:-c:v libx264 -c:a aac",
+            "-o", video_path,
+            url
+        ]
 
     try:
         subprocess.run(cmd, check=True)
@@ -49,20 +63,31 @@ async def download_media(url, chat_id, message_id):
 
     while 1:
         try:
-            with open(video_path, "rb") as video_file:
-                await bot.send_video(
-                    chat_id=chat_id, 
-                    video=video_file, 
-                    reply_to_message_id=message_id, 
-                    supports_streaming=True,
-                    read_timeout=200,
-                    write_timeout=200,
-                    pool_timeout=200,
-                    connect_timeout=200
-                )
+            with open(video_path, "rb") as media_file:
+                if is_audio:
+                    await bot.send_audio(
+                        chat_id=chat_id, 
+                        audio=media_file, 
+                        reply_to_message_id=message_id, 
+                        read_timeout=200,
+                        write_timeout=200,
+                        pool_timeout=200,
+                        connect_timeout=200
+                    )
+                else:
+                    await bot.send_video(
+                        chat_id=chat_id, 
+                        video=media_file, 
+                        reply_to_message_id=message_id, 
+                        supports_streaming=True,
+                        read_timeout=200,
+                        write_timeout=200,
+                        pool_timeout=200,
+                        connect_timeout=200
+                    )
             break
         except TimedOut:
-            logger.warning("Timed out while sending video, retrying...")
+            logger.warning("Timed out while sending media, retrying...")
             continue
     os.remove(video_path)
 
