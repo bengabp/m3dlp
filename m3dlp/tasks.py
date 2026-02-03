@@ -27,24 +27,23 @@ dramatiq.get_broker().add_middleware(StartupMiddleware())
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 
 @dramatiq.actor(queue_name="media_download")
-async def download_media(url, chat_id, message_id, is_audio=False):
+async def download_media(url, chat_id, original_msg_id, status_msg_id, is_audio=False):
     # try:
     media_id = settings.gen_uuid_hex()
     
     if is_audio:
-        ext = "mp3"
-        video_path = os.path.join(DOWNLOADS_DIR, f"{media_id}.{ext}")
+        # Use template to preserve title in filename, prefixed with ID for uniqueness
+        output_template = os.path.join(DOWNLOADS_DIR, f"{media_id}_%(title)s.%(ext)s")
         cmd = [
             "yt-dlp",
             "-f", "bestaudio/best",
             "-x",
             "--audio-format", "mp3",
-            "-o", video_path,
+            "-o", output_template,
             url
         ]
     else:
-        ext = "mp4"
-        video_path = os.path.join(DOWNLOADS_DIR, f"{media_id}.{ext}")
+        video_path = os.path.join(DOWNLOADS_DIR, f"{media_id}.mp4")
         cmd = [
             "yt-dlp",
             "-f", "bestvideo+bestaudio/best",
@@ -60,15 +59,36 @@ async def download_media(url, chat_id, message_id, is_audio=False):
     except subprocess.CalledProcessError as e:
         logger.error(f"yt-dlp failed: {e}")
         return
+        
+    # Locate the downloaded file
+    final_path = None
+    if is_audio:
+        # Find file starting with media_id in downloads dir
+        for f in os.listdir(DOWNLOADS_DIR):
+            if f.startswith(media_id):
+                final_path = os.path.join(DOWNLOADS_DIR, f)
+                break
+    else:
+        final_path = video_path
+
+    if not final_path or not os.path.exists(final_path):
+        logger.error("Downloaded file not found.")
+        return
 
     while 1:
         try:
-            with open(video_path, "rb") as media_file:
+            with open(final_path, "rb") as media_file:
+                # Delete the "Download started!" message
+                try:
+                    await bot.delete_message(chat_id=chat_id, message_id=status_msg_id)
+                except Exception as e:
+                    logger.warning(f"Failed to delete status message: {e}")
+
                 if is_audio:
                     await bot.send_audio(
                         chat_id=chat_id, 
                         audio=media_file, 
-                        reply_to_message_id=message_id, 
+                        reply_to_message_id=original_msg_id, 
                         read_timeout=200,
                         write_timeout=200,
                         pool_timeout=200,
@@ -78,7 +98,7 @@ async def download_media(url, chat_id, message_id, is_audio=False):
                     await bot.send_video(
                         chat_id=chat_id, 
                         video=media_file, 
-                        reply_to_message_id=message_id, 
+                        reply_to_message_id=original_msg_id, 
                         supports_streaming=True,
                         read_timeout=200,
                         write_timeout=200,
@@ -89,7 +109,9 @@ async def download_media(url, chat_id, message_id, is_audio=False):
         except TimedOut:
             logger.warning("Timed out while sending media, retrying...")
             continue
-    os.remove(video_path)
+    
+    if os.path.exists(final_path):
+        os.remove(final_path)
 
     # except Exception as e:
     #     logger.error(f"Error downloading video: {e}")
